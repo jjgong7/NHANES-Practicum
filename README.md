@@ -1,7 +1,7 @@
 # NHANES Practicum
+Details and write-up about this project are available [here](https://www.gong-jj.com/nhanes/).  
 
-## Files:
----  
+## Files:  
 1. Files.xlsx
     * Contains the matched indexes of the NHANES files across the years sorted alphabetically, indicates features used for analysis, and re-naming of features across the years for consistency. 
 2. run_notebooks.py
@@ -15,10 +15,11 @@
     * Notebooks that merge appropriate files for analysis, recategorize labels, one-hot encode features, and upload data to a local NoSQL database. 
 6. /Data Analysis
     * Notebooks for exploratory data analysis, fitting random forest and XGBoost models to the data, and evaluating the performance of the models. Identify risk factors for hospital utilization and major diseases.
+7. /Prevalence
+    * Notebooks to generate data (.csv) files for prevalence plots
+    * R Notebooks to generate prevalence plots
 
-
-## Instructions to Run:
----  
+## Instructions to Run:  
 1. Download files from NHANES using NHANES-Downloader scripts
     * Navigate to the NHANES-Downloader folder and follow the [README](./NHANES-Downloader/README.md).  
     * In terminal go to NHANES-Downloader folder and run (MAC):
