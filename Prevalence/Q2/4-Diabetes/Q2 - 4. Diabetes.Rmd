@@ -1,0 +1,1009 @@
+---
+title: "Prevalence"
+runtime: shiny
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r eruptions, echo=FALSE}
+inputPanel(
+  selectInput("n_breaks", label = "Number of bins:",
+              choices = c(10, 20, 35, 50), selected = 20),
+  
+  sliderInput("bw_adjust", label = "Bandwidth adjustment:",
+              min = 0.2, max = 2, value = 1, step = 0.2)
+)
+
+renderPlot({
+  hist(faithful$eruptions, probability = TRUE, breaks = as.numeric(input$n_breaks),
+       xlab = "Duration (minutes)", main = "Geyser eruption duration")
+  
+  dens <- density(faithful$eruptions, adjust = input$bw_adjust)
+  lines(dens, col = "blue")
+})
+```
+
+```{r tabsets, echo=FALSE}
+shinyAppDir(
+  system.file("examples/06_tabsets", package = "shiny"),
+  options = list(
+    width = "100%", height = 550
+  )
+)
+```
+
+
+```{r}
+rm(list = ls())
+
+#install.packages('survey')
+#install.packages('dplyr')
+library(survey)
+library(ggplot2)
+library(dplyr)
+
+#Set working directory
+setwd("/Users/changzhoug/GA Tech/Practicum/Prevalence/Q2/4 - Diabetes")
+#Read Data
+q2d_1 = read.csv("q2_diabetes.csv", head = TRUE, sep = ",")
+```
+
+
+
+```{r}
+#Remove the unncessary columns
+q2d <- subset(q2d_1, select = -c(X) )
+#Defining Survey Weight
+nhanes <- svydesign(id=~SDMVPSU, strata =~SDMVSTRA, weights=~DRX18YR, nest=TRUE, data =q2d)
+```
+
+```{r}
+colnames(q2d)
+c_cols <- c("X_id","HUQ010","HUQ050","HID010_2.0","SMD410_2.0", "HUQ020_2.0","HUQ020_3.0", "HUQ030_2.0","HUQ030_3.0","HUQ070_2.0","DMDBORN4_2.0","DMDCITZN_2.0","RIAGENDR_2.0","RIDRETH1_2.0","RIDRETH1_3.0","RIDRETH1_4.0", "RIDRETH1_5.0", "Year", "ALQ101_2.0", "SMQ680_2.0", "BPQ020_2.0")
+o_cols <- c("DMDHHSIZ","DMDHREDU", "INDFMINC")
+q2d[c_cols] <- lapply(q2d[c_cols], factor)
+q2d[o_cols] <- lapply(q2d[o_cols], ordered)
+sapply(q2d, class)
+```
+
+
+# Calculating the Prevalence of Risk Factor for Diabetes:
+
+## Factor 1: DMDHHSIZ – Number of people in the household – 1 to 7 or more people
+```{r}
+# figure out the levels
+levels <- svytable( ~ interaction(DIQ010, DMDHHSIZ) , nhanes )
+
+
+# calculate svyciprop zero/one for each possible level
+svyciprop_fun <-
+    function( this_level , ci = FALSE , ... ){
+        this_formula <- as.formula( paste0( "~as.factor( '" , this_level , "' == interaction(DIQ010, DMDHHSIZ))"))
+
+        res <- svyciprop( this_formula , nhanes , ... )
+        if( ci ) res <- confint( res )
+        res
+    }
+
+
+# use the default method
+a <- cbind(
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun ) ) ,
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun , ci = TRUE ) )
+)
+```
+
+
+
+```{r}
+mat <- data.frame(a)
+colnames(mat) <- c("Mean", "Lower", "Upper")
+rownames(mat) <- c(names(levels))
+#Get only 1 - Diabetes Prevalence
+b <- mat[seq(2, nrow(mat), 2),]
+
+#Get names of factors
+b$Cond <- levels(factor(q2d$DMDHHSIZ))
+
+## ERROR BAR PLOT ##
+p <- ggplot(b, aes(x=Cond, y=Mean, fill = Cond)) + labs(x="Household Size (1 to 7+)",y= "Diabetes Prevalence by Household Size", title="Diabetes Prevalence by Household Size",fill = "Household Size", caption="source: CDC/NHANES") +
+scale_y_continuous(breaks = pretty(b$Mean, n = 10)) 
+#+ theme(axis.text.x = element_text(angle = 15, hjust = 1))
+
+p +
+ geom_col(position = "dodge") +
+ geom_errorbar(aes(ymin = Lower, ymax = Upper), position = "dodge", width = 0.25)
+
+
+dodge <- position_dodge(width=0.9)
+p +
+  geom_col(position = dodge) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), position = dodge, width = 0.25)
+
+```
+
+
+
+## Factor 2: RIDRETH1_3.0 – Non-Hispanic White (1-yes, 0 – no)
+```{r}
+# figure out the levels
+levels <- svytable( ~ interaction(DIQ010, RIDRETH1_3.0) , nhanes )
+
+
+# calculate svyciprop zero/one for each possible level
+svyciprop_fun <-
+    function( this_level , ci = FALSE , ... ){
+        this_formula <- as.formula( paste0( "~as.factor( '" , this_level , "' == interaction(DIQ010, RIDRETH1_3.0))"))
+
+        res <- svyciprop( this_formula , nhanes , ... )
+        if( ci ) res <- confint( res )
+        res
+    }
+
+
+# use the default method
+c <- cbind(
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun ) ) ,
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun , ci = TRUE ) )
+)
+```
+
+```{r}
+mat <- data.frame(c)
+colnames(mat) <- c("Mean", "Lower", "Upper")
+rownames(mat) <- c(names(levels))
+#Get only 1 - Diabetes Prevalence
+d <- mat[seq(2, nrow(mat), 2),]
+
+#Get names of factors
+d$Cond <- levels(factor(q2d$RIDRETH1_3.0))
+
+## ERROR BAR PLOT ###
+q <- ggplot(d, aes(x=Cond, y=Mean, fill = Cond)) + labs(x="Non-Hispanic White (1-Yes, 0–No)",y= "Diabetes by Non-Hispanic White", title="Diabetes Prevalence in Non-Hispanic White", fill = "Non-Hispanic White (1-Yes, 0–No)", caption="source: CDC/NHANES") +
+scale_y_continuous(breaks = pretty(d$Mean, n = 10)) 
+#+ theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+q +
+ geom_col(position = "dodge") +
+ geom_errorbar(aes(ymin = Lower, ymax = Upper), position = "dodge", width = 0.25)
+
+
+dodge <- position_dodge(width=0.9)
+q +
+  geom_col(position = dodge) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), position = dodge, width = 0.25)
+```
+
+## Factor 3: RIDAGEYR - Age at Screening
+```{r}
+# figure out the levels
+levels <- svytable( ~ interaction(DIQ010, RIDAGEYR) , nhanes )
+
+
+# calculate svyciprop zero/one for each possible level
+svyciprop_fun <-
+    function( this_level , ci = FALSE , ... ){
+        this_formula <- as.formula( paste0( "~as.factor( '" , this_level , "' == interaction(DIQ010, RIDAGEYR))"))
+
+        res <- svyciprop( this_formula , nhanes , ... )
+        if( ci ) res <- confint( res )
+        res
+    }
+
+
+# use the default method
+e <- cbind(
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun ) ) ,
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun , ci = TRUE ) )
+)
+```
+
+
+
+```{r}
+
+mat <- data.frame(e)
+colnames(mat) <- c("Mean", "Lower", "Upper")
+rownames(mat) <- c(names(levels))
+#Get only 1 - Diabetes Prevalence
+f <- mat[seq(2, nrow(mat), 2),]
+
+#Get names of factors
+f$AgeGroup <- levels(factor(q2d$RIDAGEYR))
+
+## ERROR BAR PLOT ##
+r <- ggplot(f, aes(x=AgeGroup, y=Mean, fill = AgeGroup)) + labs(x="Age Group",y= "Diabetes by Age Group", title="Diabetes Prevalence by Age Group", caption="source: CDC/NHANES") 
+#+ scale_y_continuous(breaks = pretty(f$Mean, n = 10))
+
+r +
+ geom_col(position = "dodge") +
+ geom_errorbar(aes(ymin = Lower, ymax = Upper), position = "dodge", width = 0.25)
+
+
+dodge <- position_dodge(width=0.9)
+r +
+  geom_col(position = dodge) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), position = dodge, width = 0.25)
+```
+
+
+## Factor 4: RIAGENDR_2.0 – Female or Male (1 – female)
+```{r}
+# figure out the levels
+levels <- svytable( ~ interaction(DIQ010, RIAGENDR_2.0) , nhanes )
+
+
+# calculate svyciprop zero/one for each possible level
+svyciprop_fun <-
+    function( this_level , ci = FALSE , ... ){
+        this_formula <- as.formula( paste0( "~as.factor( '" , this_level , "' == interaction(DIQ010, RIAGENDR_2.0))"))
+
+        res <- svyciprop( this_formula , nhanes , ... )
+        if( ci ) res <- confint( res )
+        res
+    }
+
+
+# use the default method
+g <- cbind(
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun ) ) ,
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun , ci = TRUE ) )
+)
+```
+
+
+```{r}
+mat <- data.frame(g)
+colnames(mat) <- c("Mean", "Lower", "Upper")
+rownames(mat) <- c(names(levels))
+#Get only 1 - Diabetes Prevalence
+h <- mat[seq(2, nrow(mat), 2),]
+
+#Get names of factors
+h$Cond <- levels(factor(q2d$RIAGENDR_2.0))
+
+## ERROR BAR PLOT ##
+s <- ggplot(h, aes(x=Cond, y=Mean, fill = Cond)) + labs(x="Gender (0 - Male, 1 - Female)",y= "Diabetes Prevalence by Gender", title="Diabetes Prevalence by Gender",fill = "(0 - Male, 1 - Female)", caption="source: CDC/NHANES")
+
+s +
+ geom_col(position = "dodge") +
+ geom_errorbar(aes(ymin = Lower, ymax = Upper), position = "dodge", width = 0.25)
+
+
+dodge <- position_dodge(width=0.9)
+s +
+  geom_col(position = dodge) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), position = dodge, width = 0.25)
+```
+
+## Factor 5: BPQ020_2.0 - Ever told you had high blood pressure (0-Yes, 1-No)
+```{r}
+# figure out the levels
+levels <- svytable( ~ interaction(DIQ010, BPQ020_2.0) , nhanes )
+
+
+# calculate svyciprop zero/one for each possible level
+svyciprop_fun <-
+    function( this_level , ci = FALSE , ... ){
+        this_formula <- as.formula( paste0( "~as.factor( '" , this_level , "' == interaction(DIQ010, BPQ020_2.0))"))
+
+        res <- svyciprop( this_formula , nhanes , ... )
+        if( ci ) res <- confint( res )
+        res
+    }
+
+
+# use the default method
+i <- cbind(
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun ) ) ,
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun , ci = TRUE ) )
+)
+```
+
+
+```{r}
+mat <- data.frame(i)
+colnames(mat) <- c("Mean", "Lower", "Upper")
+rownames(mat) <- c(names(levels))
+#Get only 1 - Diabetes Prevalence
+j <- mat[seq(2, nrow(mat), 2),]
+
+#Get names of factors
+j$Cond <- levels(factor(q2d$BPQ020_2.0))
+
+## ERROR BAR PLOT ##
+t <- ggplot(j, aes(x=Cond, y=Mean, fill = Cond)) + labs(x="Ever told you had High Blood Pressure (0-Yes, 1-No)",y= "Diabetes Proportion by High Blood Pressure", title="Diabetes Prevalence by High Blood Pressure",fill = "High Blood Pressure (0-Yes, 1-No)", caption="source: CDC/NHANES") 
+t +
+ geom_col(position = "dodge") +
+ geom_errorbar(aes(ymin = Lower, ymax = Upper), position = "dodge", width = 0.25)
+
+
+dodge <- position_dodge(width=0.9)
+t +
+  geom_col(position = dodge) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), position = dodge, width = 0.25)
+```
+
+
+## Factor 6: HID010_2.0 – Covered by health insurance (0–Yes, 1–No)
+```{r}
+# figure out the levels
+levels <- svytable( ~ interaction(DIQ010, HID010_2.0) , nhanes )
+
+
+# calculate svyciprop zero/one for each possible level
+svyciprop_fun <-
+    function( this_level , ci = FALSE , ... ){
+        this_formula <- as.formula( paste0( "~as.factor( '" , this_level , "' == interaction(DIQ010, HID010_2.0))"))
+
+        res <- svyciprop( this_formula , nhanes , ... )
+        if( ci ) res <- confint( res )
+        res
+    }
+
+
+# use the default method
+o <- cbind(
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun ) ) ,
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun , ci = TRUE ) )
+)
+```
+
+
+```{r}
+mat <- data.frame(o)
+colnames(mat) <- c("Mean", "Lower", "Upper")
+rownames(mat) <- c(names(levels))
+#Get only 1 - Diabetes Prevalence
+p <- mat[seq(2, nrow(mat), 2),]
+
+#Get names of factors
+p$Cond <- levels(factor(q2d$HID010_2.0))
+
+## ERROR BAR PLOT ##
+q <- ggplot(p, aes(x=Cond, y=Mean, fill = Cond)) + labs(x="Covered by health insurance (0–Yes, 1–No)",y= "Diabetes Prevalence by High Health Insurance", title="Diabetes Prevalence by Health Insurance",fill = "Covered by health insurance (0–Yes, 1–No)", caption="source: CDC/NHANES") 
+q +
+ geom_col(position = "dodge") +
+ geom_errorbar(aes(ymin = Lower, ymax = Upper), position = "dodge", width = 0.25)
+
+
+dodge <- position_dodge(width=0.9)
+q +
+  geom_col(position = dodge) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), position = dodge, width = 0.25)
+```
+
+
+## Factor 7: MCQ010_2.0 – Ever been told you have asthma (0-Yes, 1-No)
+```{r}
+# figure out the levels
+levels <- svytable( ~ interaction(DIQ010, MCQ010_2.0) , nhanes )
+
+
+# calculate svyciprop zero/one for each possible level
+svyciprop_fun <-
+    function( this_level , ci = FALSE , ... ){
+        this_formula <- as.formula( paste0( "~as.factor( '" , this_level , "' == interaction(DIQ010, MCQ010_2.0))"))
+
+        res <- svyciprop( this_formula , nhanes , ... )
+        if( ci ) res <- confint( res )
+        res
+    }
+
+
+# use the default method
+c_1 <- cbind(
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun ) ) ,
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun , ci = TRUE ) )
+)
+```
+
+
+```{r}
+mat <- data.frame(c_1)
+colnames(mat) <- c("Mean", "Lower", "Upper")
+rownames(mat) <- c(names(levels))
+#Get only 1 - Diabetes Prevalence
+c_2 <- mat[seq(2, nrow(mat), 2),]
+
+#Get names of factors
+c_2$Cond <- levels(factor(q2d$MCQ010_2.0))
+
+## ERROR BAR PLOT ##
+c_3 <- ggplot(c_2, aes(x=Cond, y=Mean, fill = Cond)) + labs(x="Ever told you had Asthma (0-Yes, 1-No)",y= "Diabetes Proportion by Asthma", title="Diabetes Prevalence by Asthma",fill = "Asthma (0-Yes, 1-No)", caption="source: CDC/NHANES") 
+c_3  +
+ geom_col(position = "dodge") +
+ geom_errorbar(aes(ymin = Lower, ymax = Upper), position = "dodge", width = 0.25)
+
+
+dodge <- position_dodge(width=0.9)
+c_3  +
+  geom_col(position = dodge) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), position = dodge, width = 0.25)
+```
+
+
+## Factor 8: SMD410_2.0 – Does anyone smoke in the home? (0-Yes, 1-No)
+```{r}
+# figure out the levels
+levels <- svytable( ~ interaction(DIQ010, SMD410_2.0) , nhanes )
+
+
+# calculate svyciprop zero/one for each possible level
+svyciprop_fun <-
+    function( this_level , ci = FALSE , ... ){
+        this_formula <- as.formula( paste0( "~as.factor( '" , this_level , "' == interaction(DIQ010, SMD410_2.0))"))
+
+        res <- svyciprop( this_formula , nhanes , ... )
+        if( ci ) res <- confint( res )
+        res
+    }
+
+
+# use the default method
+d_1 <- cbind(
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun ) ) ,
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun , ci = TRUE ) )
+)
+```
+
+
+```{r}
+mat <- data.frame(d_1)
+colnames(mat) <- c("Mean", "Lower", "Upper")
+rownames(mat) <- c(names(levels))
+#Get only 1 - Diabetes Prevalence
+d_2 <- mat[seq(2, nrow(mat), 2),]
+
+#Get names of factors
+d_2$Cond <- levels(factor(q2d$SMD410_2.0))
+
+## ERROR BAR PLOT ##
+d_3 <- ggplot(d_2, aes(x=Cond, y=Mean, fill = Cond)) + labs(x="Does anyone smoke in the home? (0-Yes, 1-No)",y= "Diabetes Prorportion by Smoking in Household", title="Diabetes Prevalence by Smoking in Household",fill = "Smoke (0-Yes, 1-No)", caption="source: CDC/NHANES") 
+d_3 +
+ geom_col(position = "dodge") +
+ geom_errorbar(aes(ymin = Lower, ymax = Upper), position = "dodge", width = 0.25)
+
+
+dodge <- position_dodge(width=0.9)
+d_3 +
+  geom_col(position = dodge) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), position = dodge, width = 0.25)
+```
+
+## Factor 9: DMDBORN4_2.0 – Country of birth (0-U.S., 1-Other)
+```{r}
+# figure out the levels
+levels <- svytable( ~ interaction(DIQ010, DMDBORN4_2.0) , nhanes )
+
+
+# calculate svyciprop zero/one for each possible level
+svyciprop_fun <-
+    function( this_level , ci = FALSE , ... ){
+        this_formula <- as.formula( paste0( "~as.factor( '" , this_level , "' == interaction(DIQ010, DMDBORN4_2.0))"))
+
+        res <- svyciprop( this_formula , nhanes , ... )
+        if( ci ) res <- confint( res )
+        res
+    }
+
+
+# use the default method
+e_1 <- cbind(
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun ) ) ,
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun , ci = TRUE ) )
+)
+```
+
+
+```{r}
+mat <- data.frame(e_1)
+colnames(mat) <- c("Mean", "Lower", "Upper")
+rownames(mat) <- c(names(levels))
+#Get only 1 - Diabetes Prevalence
+e_2 <- mat[seq(2, nrow(mat), 2),]
+
+#Get names of factors
+e_2$Cond <- levels(factor(q2d$DMDBORN4_2.0))
+
+## ERROR BAR PLOT ##
+e_3 <- ggplot(e_2, aes(x=Cond, y=Mean, fill = Cond)) + labs(x="Country of birth (0-U.S., 1-Other)",y= "Diabetes proportion by Country of Birth", title="Diabetes Prevalence by Country of Birth",fill = "Country of birth (0-U.S., 1-Other)", caption="source: CDC/NHANES") 
+e_3 +
+ geom_col(position = "dodge") +
+ geom_errorbar(aes(ymin = Lower, ymax = Upper), position = "dodge", width = 0.25)
+
+
+dodge <- position_dodge(width=0.9)
+e_3 +
+  geom_col(position = dodge) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), position = dodge, width = 0.25)
+```
+
+
+
+## Factor 10: LBXTC – Total cholesterol (mg/dL)
+```{r}
+# figure out the levels
+levels <- svytable( ~ interaction(DIQ010, LBXTC) , nhanes )
+
+
+# calculate svyciprop zero/one for each possible level
+svyciprop_fun <-
+    function( this_level , ci = FALSE , ... ){
+        this_formula <- as.formula( paste0( "~as.factor( '" , this_level , "' == interaction(DIQ010, LBXTC))"))
+
+        res <- svyciprop( this_formula , nhanes , ... )
+        if( ci ) res <- confint( res )
+        res
+    }
+
+
+# use the default method
+e_1 <- cbind(
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun ) ) ,
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun , ci = TRUE ) )
+)
+```
+
+
+
+```{r}
+mat <- data.frame(e_1)
+colnames(mat) <- c("Mean", "Lower", "Upper")
+rownames(mat) <- c(names(levels))
+#Get only 1 - Diabetes Prevalence
+e_2 <- mat[seq(2, nrow(mat), 2),]
+
+#Get names of factors
+e_2$Cond <- levels(factor(q2d$LBXTC))
+
+## ERROR BAR ##
+e_3 <- ggplot(e_2, aes(x=factor(Cond, level=c('Desirable (<200 mg/dL)', 'Borderline High (201-239 mg/dL)', 'High (>240 mg/dL)')), y=Mean, fill = Cond)) + labs(x="Total Cholesterol Levels",y= "Diabetes Prevalence by Total Cholesterol Levels", title="Diabetes Prevalence by Total Cholesterol Levels",fill = "Levels", caption="source: CDC/NHANES") +
+scale_y_continuous(breaks = pretty(e_2$Mean, n = 10)) + theme(axis.text.x = element_text(angle = 15, hjust = 1))
+
+e_3 +
+ geom_col(position = "dodge") +
+ geom_errorbar(aes(ymin = Lower, ymax = Upper), position = "dodge", width = 0.25)
+
+
+dodge <- position_dodge(width=0.9)
+e_3 +
+  geom_col(position = dodge) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), position = dodge, width = 0.25)
+```
+
+
+## Factor 11: LBDLDL – LDL-cholesterol (mg/dL)
+```{r}
+# figure out the levels
+levels <- svytable( ~ interaction(DIQ010, LBDLDL) , nhanes )
+
+
+# calculate svyciprop zero/one for each possible level
+svyciprop_fun <-
+    function( this_level , ci = FALSE , ... ){
+        this_formula <- as.formula( paste0( "~as.factor( '" , this_level , "' == interaction(DIQ010, LBDLDL))"))
+
+        res <- svyciprop( this_formula , nhanes , ... )
+        if( ci ) res <- confint( res )
+        res
+    }
+
+
+# use the default method
+f_1 <- cbind(
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun ) ) ,
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun , ci = TRUE ) )
+)
+```
+
+
+
+```{r}
+mat <- data.frame(f_1)
+colnames(mat) <- c("Mean", "Lower", "Upper")
+rownames(mat) <- c(names(levels))
+#Get only 1 - Diabetes Prevalence
+f_2 <- mat[seq(2, nrow(mat), 2),]
+
+#Get names of factors
+f_2$Cond <- levels(factor(q2d$LBDLDL))
+
+## ERROR BAR ##
+f_3 <- ggplot(f_2, aes(x=factor(Cond, level=c('Desirable (<100 mg/dL)', 'Acceptable (100-129 mg/dL)', 'Borderline High(130-159 mg/dL)','High (160-189 mg/dL)', 'Very High (>190 mg/dL)')), y=Mean, fill = Cond)) + labs(x="LDL - Cholesterol Levels",y= "Diabetes Proportion by LDL - Cholesterol Levels", title="Diabetes Prevalence LDL - Cholesterol Levels",fill = "Levels", caption="source: CDC/NHANES") +
+scale_y_continuous(breaks = pretty(f_2$Mean, n = 10)) +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+f_3 +
+ geom_col(position = "dodge") +
+ geom_errorbar(aes(ymin = Lower, ymax = Upper), position = "dodge", width = 0.25)
+
+
+dodge <- position_dodge(width=0.9)
+f_3 +
+  geom_col(position = dodge) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), position = dodge, width = 0.25)
+```
+
+
+## Factor 12: BMXBMI - BMI 
+```{r}
+# figure out the levels
+levels <- svytable( ~ interaction(DIQ010, BMXBMI) , nhanes )
+
+
+# calculate svyciprop zero/one for each possible level
+svyciprop_fun <-
+    function( this_level , ci = FALSE , ... ){
+        this_formula <- as.formula( paste0( "~as.factor( '" , this_level , "' == interaction(DIQ010, BMXBMI))"))
+
+        res <- svyciprop( this_formula , nhanes , ... )
+        if( ci ) res <- confint( res )
+        res
+    }
+
+
+# use the default method
+g_1 <- cbind(
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun ) ) ,
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun , ci = TRUE ) )
+)
+```
+
+
+
+```{r}
+mat <- data.frame(g_1)
+colnames(mat) <- c("Mean", "Lower", "Upper")
+rownames(mat) <- c(names(levels))
+#Get only 1 - Diabetes Prevalence
+g_2 <- mat[seq(2, nrow(mat), 2),]
+
+#Get names of factors
+g_2$Cond <- levels(factor(q2d$BMXBMI))
+
+## ERROR BAR PLOT ##
+g_3 <- ggplot(g_2, aes(x=factor(Cond, level=c('Underweight (BMI<18.5)', 'Normal (18.5-24.9)', 'Overweight (25-29.9)','Obese(30<BMI)')), y=Mean, fill = Cond)) + labs(x="BMI",y= "Diabetes Proportion by BMI Levels", title="Diabetes Prevalence BMI Levels",fill = "BMI Levels", caption="source: CDC/NHANES") + 
+scale_y_continuous(breaks = pretty(g_2$Mean, n = 5)) +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+g_3 +
+ geom_col(position = "dodge") +
+ geom_errorbar(aes(ymin = Lower, ymax = Upper), position = "dodge", width = 0.25)
+
+
+dodge <- position_dodge(width=0.9)
+g_3 +
+  geom_col(position = dodge) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), position = dodge, width = 0.25)
+```
+
+
+
+## Overtime - Label
+```{r}
+# figure out the levels
+levels <- svytable( ~ interaction(DIQ010, Year) , nhanes )
+
+
+# calculate svyciprop zero/one for each possible level
+svyciprop_fun <-
+    function( this_level , ci = FALSE , ... ){
+        this_formula <- as.formula( paste0( "~as.factor( '" , this_level , "' == interaction(DIQ010, Year))"))
+
+        res <- svyciprop( this_formula , nhanes , ... )
+        if( ci ) res <- confint( res )
+        res
+    }
+
+
+# use the default method
+k <- cbind(
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun ) ) ,
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun , ci = TRUE ) )
+)
+```
+
+
+```{r}
+mat <- data.frame(k)
+colnames(mat) <- c("Mean", "Lower", "Upper")
+rownames(mat) <- c(names(levels))
+#Get only 1 - Diabetes Prevalence
+l <- mat[seq(2, nrow(mat), 2),]
+
+#Get names of factors
+l$Cond <- c("1999-2000","2001-2002","2003-2004","2005-2006","2007-2008","2009-2010","2011-2012", "2013-2014", "2015-2016")
+
+## ERROR BAR PLOT ##
+u <- ggplot(l, aes(x=Cond, y=Mean, fill = Cond)) + labs(x="Years (1999-2016)",y= "Diabetes", title="Diabetes Over Time",fill = "Years", caption="source: CDC/NHANES") +
+theme(axis.text.x = element_text(angle = 15, hjust = 1))
+u +
+ geom_col(position = "dodge") +
+ geom_errorbar(aes(ymin = Lower, ymax = Upper), position = "dodge", width = 0.25)
+
+
+dodge <- position_dodge(width=0.9)
+u +
+  geom_col(position = dodge) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), position = dodge, width = 0.25)
+```
+
+
+## Overtime - Hospital Utilization
+```{r}
+# figure out the levels
+levels <- svytable( ~ interaction(HUQ050, Year) , nhanes )
+
+
+# calculate svyciprop zero/one for each possible level
+svyciprop_fun <-
+    function( this_level , ci = FALSE , ... ){
+        this_formula <- as.formula( paste0( "~as.factor( '" , this_level , "' == interaction(HUQ050, Year))"))
+
+        res <- svyciprop( this_formula , nhanes , ... )
+        if( ci ) res <- confint( res )
+        res
+    }
+
+
+# use the default method
+m <- cbind(
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun ) ) ,
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun , ci = TRUE ) )
+)
+```
+
+
+
+```{r}
+mat <- data.frame(m)
+colnames(mat) <- c("Mean", "Lower", "Upper")
+rownames(mat) <- c(names(levels))
+#Get only 1 - Hospital Utilization Disease Prevalence
+n <- mat[seq(1, nrow(mat), 2),]
+
+#Get names of factors
+n$Cond <- c("1999-2000","2001-2002","2003-2004","2005-2006","2007-2008","2009-2010","2011-2012", "2013-2014", "2015-2016")
+
+## ERROR BAR PLOT ##
+v <- ggplot(n, aes(x=Cond, y=Mean, fill = Cond)) + labs(x="Years (1999-2016)",y= "Hospital Utilization", title="Hospital Utilization Over Time",fill = "Years", caption="source: CDC/NHANES") +
+theme(axis.text.x = element_text(angle = 15, hjust = 1))
+v +
+ geom_col(position = "dodge") +
+ geom_errorbar(aes(ymin = Lower, ymax = Upper), position = "dodge", width = 0.25)
+
+
+dodge <- position_dodge(width=0.9)
+v +
+  geom_col(position = dodge) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), position = dodge, width = 0.25)
+
+
+```
+
+
+## Overtime - Social Factors
+```{r}
+# figure out the levels
+levels <- svytable( ~ interaction(DMDHREDU, Year) , nhanes )
+
+
+# calculate svyciprop zero/one for each possible level
+svyciprop_fun <-
+    function( this_level , ci = FALSE , ... ){
+        this_formula <- as.formula( paste0( "~as.factor( '" , this_level , "' == interaction(DMDHREDU, Year))"))
+
+        res <- svyciprop( this_formula , nhanes , ... )
+        if( ci ) res <- confint( res )
+        res
+    }
+
+
+# use the default method
+a_1 <- cbind(
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun ) ) ,
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun , ci = TRUE ) )
+)
+```
+
+
+
+```{r}
+mat <- data.frame(a_1)
+colnames(mat) <- c("Mean", "Lower", "Upper")
+rownames(mat) <- c(names(levels))
+#Get only 1 - Socio Economic Factor Overtime Disease Prevalence
+a_2 <- mat[seq(2, nrow(mat), 5),]
+
+#Get names of factors
+a_2$Cond <- c("1999-2000","2001-2002","2003-2004","2005-2006","2007-2008","2009-2010","2011-2012", "2013-2014", "2015-2016")
+
+## ERROR BAR PLOT ##
+w <- ggplot(a_2, aes(x=Cond, y=Mean, fill = Cond)) + labs(x="Years (1999-2016)",y= "Proportion", title="Proportion of Education Levels Over Time",fill = "Education (Higher is more educated)", caption="source: CDC/NHANES") +
+theme(axis.text.x = element_text(angle = 15, hjust = 1))
+w +
+ geom_col(position = "dodge") +
+ geom_errorbar(aes(ymin = Lower, ymax = Upper), position = "dodge", width = 0.25)
+
+
+dodge <- position_dodge(width=0.9)
+w +
+  geom_col(position = dodge) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), position = dodge, width = 0.25)
+```
+
+
+## Overtime - Social Factors - Income
+```{r}
+# figure out the levels
+levels <- svytable( ~ interaction(INDFMINC, Year) , nhanes )
+
+
+# calculate svyciprop zero/one for each possible level
+svyciprop_fun <-
+    function( this_level , ci = FALSE , ... ){
+        this_formula <- as.formula( paste0( "~as.factor( '" , this_level , "' == interaction(INDFMINC, Year))"))
+
+        res <- svyciprop( this_formula , nhanes , ... )
+        if( ci ) res <- confint( res )
+        res
+    }
+
+
+# use the default method
+b_1 <- cbind(
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun ) ) ,
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun , ci = TRUE ) )
+)
+```
+
+
+
+```{r}
+mat <- data.frame(b_1)
+colnames(mat) <- c("Mean", "Lower", "Upper")
+rownames(mat) <- c(names(levels))
+#Get only 1 - Socio Economic Factor Overtime Disease Prevalence
+b_2 <- mat[seq(11, nrow(mat), 11),]
+
+#Get names of factors
+b_2$Cond <- c("1999-2000","2001-2002","2003-2004","2005-2006","2007-2008","2009-2010","2011-2012", "2013-2014", "2015-2016")
+
+## ERROR BAR PLOT ##
+x <- ggplot(b_2, aes(x=Cond, y=Mean, fill = Cond)) + labs(x="Years (1999-2016)",y= "Proportion", title="Proportion of Income Levels Over Time",fill = "Income", caption="source: CDC/NHANES") +
+theme(axis.text.x = element_text(angle = 15, hjust = 1))
+x +
+ geom_col(position = "dodge") +
+ geom_errorbar(aes(ymin = Lower, ymax = Upper), position = "dodge", width = 0.25)
+
+
+dodge <- position_dodge(width=0.9)
+x +
+  geom_col(position = dodge) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), position = dodge, width = 0.25)
+```
+
+
+## Overtime - Social Factors - Access to Healthcare
+```{r}
+# figure out the levels
+levels <- svytable( ~ interaction(HUQ030_2.0, Year) , nhanes )
+
+
+# calculate svyciprop zero/one for each possible level
+svyciprop_fun <-
+    function( this_level , ci = FALSE , ... ){
+        this_formula <- as.formula( paste0( "~as.factor( '" , this_level , "' == interaction(HUQ030_2.0, Year))"))
+
+        res <- svyciprop( this_formula , nhanes , ... )
+        if( ci ) res <- confint( res )
+        res
+    }
+
+
+# use the default method
+b_1 <- cbind(
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun ) ) ,
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun , ci = TRUE ) )
+)
+```
+
+
+
+```{r}
+mat <- data.frame(b_1)
+colnames(mat) <- c("Mean", "Lower", "Upper")
+rownames(mat) <- c(names(levels))
+#Get only 1 - Socio Economic Factor Overtime Disease Prevalence
+b_2 <- mat[seq(2, nrow(mat), 2),]
+
+#Get names of factors
+b_2$Cond <- c("1999-2000","2001-2002","2003-2004","2005-2006","2007-2008","2009-2010","2011-2012", "2013-2014", "2015-2016")
+
+## ERROR BAR PLOT ##
+x <- ggplot(b_2, aes(x=Cond, y=Mean, fill = Cond)) + labs(x="Years (1999-2016)",y= "Proportion with No Access to Healthcare", title="Proportion of No Healthcare Access Over Time", caption="source: CDC/NHANES") +
+theme(axis.text.x = element_text(angle = 15, hjust = 1)) + scale_fill_discrete(name = "No Healthcare Access")
+x +
+ geom_col(position = "dodge") +
+ geom_errorbar(aes(ymin = Lower, ymax = Upper), position = "dodge", width = 0.25)
+
+
+dodge <- position_dodge(width=0.9)
+x +
+  geom_col(position = dodge) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), position = dodge, width = 0.25)
+```
+
+# Question 5:
+```{r}
+#Remove the unncessary columns
+q2d_2 <- data.frame(q2d_1)
+#Undiagnosed Diabetes where BMI > 30
+undiag <- q2d_2 %>% 
+  mutate(Undiagnosed_Diabetes = if_else(q2d_2$DIQ010==0 & q2d_2$BMXBMI == 'Obese(30<BMI)', 'Undiagnosed', 'Not Undiagnosed'))
+```
+
+```{r}
+table(undiag$Undiagnosed_Diabetes)
+```
+
+
+```{r}
+#Defining Survey Weight
+nhanes_1 <- svydesign(id=~SDMVPSU, strata =~SDMVSTRA, weights=~DRX18YR, nest=TRUE, data =undiag)
+```
+
+## Undiagnosed Diabetes Over Time: Characterized by BMI > 30
+```{r}
+# figure out the levels
+levels <- svytable( ~ interaction(Undiagnosed_Diabetes, Year) , nhanes_1 )
+
+
+# calculate svyciprop zero/one for each possible level
+svyciprop_fun <-
+    function( this_level , ci = FALSE , ... ){
+        this_formula <- as.formula( paste0( "~as.factor( '" , this_level , "' == interaction(HUQ030_2.0, Year))"))
+
+        res <- svyciprop( this_formula , nhanes_1 , ... )
+        if( ci ) res <- confint( res )
+        res
+    }
+
+
+# use the default method
+b_1 <- cbind(
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun ) ) ,
+    do.call( rbind , lapply( names( levels ) , svyciprop_fun , ci = TRUE ) )
+)
+```
+
+
+
+```{r}
+mat <- data.frame(b_1)
+colnames(mat) <- c("Mean", "Lower", "Upper")
+rownames(mat) <- c(names(levels))
+#Get only 1 - Undiagnosed Diabetes Overtime Prevalence
+b_2 <- mat[seq(2, nrow(mat), 2),]
+
+#Get names of factors
+b_2$Cond <- c("1999-2000","2001-2002","2003-2004","2005-2006","2007-2008","2009-2010","2011-2012", "2013-2014", "2015-2016")
+
+## ERROR BAR PLOT ##
+x <- ggplot(b_2, aes(x=Cond, y=Mean, fill = Cond)) + labs(x="Years (1999-2016)",y= "Proportion with Undiagnosed Diabetes", title="Proportion of Undiagnosed Diabetes Over Time", caption="source: CDC/NHANES") +
+theme(axis.text.x = element_text(angle = 25, hjust = 1)) + scale_fill_discrete(name = "Undiagnosed Diabetes")
+x +
+ geom_col(position = "dodge") +
+ geom_errorbar(aes(ymin = Lower, ymax = Upper), position = "dodge", width = 0.25)
+
+
+dodge <- position_dodge(width=0.9)
+x +
+  geom_col(position = dodge) +
+  geom_errorbar(aes(ymin = Lower, ymax = Upper), position = dodge, width = 0.25)
+```
+
